@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard ติดตามการถ่ายโอนภารกิจ | สชป.8 (อัตโนมัติ)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+    :root {
+      --primary: #255988; --primary-dark: #1e4d75; --success: #2a9d8f;
+      --warning: #e9c46a; --danger: #e76f51; --bg: #f0f4f8;
+      --card: #ffffff; --text: #1e293b; --muted: #64748b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Sarabun', sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+    .header { background: linear-gradient(135deg, #255988 0%, #1e4d75 100%); color: white; padding: 22px 32px 40px; }
+    .header-top { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+    .header h1 { font-size: 1.55rem; font-weight: 700; margin-bottom: 4px; }
+    .header .subtitle { font-size: 0.98rem; opacity: 0.92; max-width: 640px; }
+    .header-meta { text-align: right; font-size: 0.82rem; opacity: 0.88; line-height: 1.55; }
+    .main { max-width: 1280px; margin: -24px auto 40px; padding: 0 20px; }
+    .live-bar {
+      background: #fff; border-radius: 12px; padding: 12px 18px; margin-bottom: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.05); display: flex; flex-wrap: wrap;
+      align-items: center; justify-content: space-between; gap: 10px; border-left: 4px solid #2a9d8f;
+    }
+    .live-bar .status { font-size: 0.88rem; color: #334155; }
+    .live-bar .status strong { color: #2a9d8f; }
+    .live-bar .time { font-size: 0.8rem; color: #94a3b8; }
+    #btnRefresh {
+      font-size: 0.8rem; padding: 6px 14px; border-radius: 6px; border: 1px solid #255988;
+      background: #255988; color: #fff; cursor: pointer; font-family: Sarabun, sans-serif; font-weight: 600;
+    }
+    #btnRefresh:disabled { opacity: 0.6; cursor: wait; }
+    .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+    .kpi {
+      background: var(--card); border-radius: 14px; padding: 20px 22px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.06); position: relative; overflow: hidden;
+    }
+    .kpi::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; }
+    .kpi.total::before { background: #64748b; }
+    .kpi.done::before { background: var(--success); }
+    .kpi.pending::before { background: var(--warning); }
+    .kpi.rate::before { background: var(--primary); }
+    .kpi .label { font-size: 0.88rem; color: var(--muted); margin-bottom: 6px; }
+    .kpi .value { font-size: 1.85rem; font-weight: 700; letter-spacing: -0.5px; }
+    .kpi .sub { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; align-items: stretch; }
+    .card {
+      background: var(--card); border-radius: 14px; padding: 18px 20px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.05); display: flex; flex-direction: column;
+    }
+    .card-title {
+      font-size: 1rem; font-weight: 600; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px; justify-content: space-between;
+    }
+    .card-title .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .chart-wrap { position: relative; height: 420px; }
+    .priority-list { display: flex; flex-direction: column; gap: 6px; }
+    .prio-item {
+      display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+      border-radius: 8px; border-left: 4px solid var(--danger);
+    }
+    .prio-name { font-weight: 600; font-size: 0.88rem; min-width: 105px; flex-shrink: 0; }
+    .prio-stat { flex: 1; text-align: right; font-size: 0.88rem; color: #334155; }
+    .prio-stat strong { font-size: 1.05rem; font-weight: 700; color: #1e293b; }
+    .prio-badge { font-weight: 700; font-size: 0.92rem; min-width: 48px; text-align: right; flex-shrink: 0; }
+    .insights { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
+    .insight {
+      background: var(--card); border-radius: 12px; padding: 16px 18px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.04); border-top: 3px solid var(--primary);
+    }
+    .insight.green { border-top-color: var(--success); }
+    .insight.red { border-top-color: var(--danger); }
+    .insight .title { font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+    .insight .val { font-size: 1.15rem; font-weight: 700; }
+    .insight .desc { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    thead th {
+      background: var(--primary); color: white; font-weight: 600;
+      padding: 6px 6px; text-align: center; white-space: nowrap;
+    }
+    thead th:first-child { border-radius: 6px 0 0 0; }
+    thead th:last-child { border-radius: 0 6px 0 0; }
+    tbody td { padding: 5px 6px; text-align: center; border-bottom: 1px solid #e2e8f0; }
+    tbody td:nth-child(2) { text-align: left; font-weight: 500; padding-left: 8px; }
+    tbody tr:hover { background: #f8fafc; }
+    .bar-cell { min-width: 140px; }
+    .bar-bg { background: #e2e8f0; border-radius: 5px; height: 11px; margin-top: 3px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 4px; }
+    .pct { font-weight: 600; font-size: 0.82rem; }
+    .pct.high { color: var(--success); }
+    .pct.mid { color: var(--primary); }
+    .pct.warn { color: #d97706; }
+    .pct.low { color: var(--danger); }
+    tfoot td {
+      background: #eef4f9; font-weight: 700; padding: 6px 6px;
+      border-top: 2px solid var(--primary); text-align: center; font-variant-numeric: tabular-nums;
+    }
+    footer { text-align: center; padding: 18px; font-size: 0.8rem; color: #94a3b8; }
+    .loading-overlay { text-align: center; padding: 40px; color: #64748b; font-size: 1rem; }
+    @media (max-width: 1024px) {
+      .kpi-row { grid-template-columns: repeat(2, 1fr); }
+      .grid-2 { grid-template-columns: 1fr; }
+      .insights { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .kpi-row { grid-template-columns: 1fr; }
+      .header { padding: 18px 16px 36px; }
+      .main { padding: 0 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <h1>Dashboard ติดตามการถ่ายโอนภารกิจ</h1>
+        <div class="subtitle">ฝ่ายปรับปรุงบำรุงรักษา ส่วนบริหารจัดการน้ำและบำรุงรักษา สำนักงานชลประทานที่ 8</div>
+      </div>
+      <div class="header-meta">
+        <span id="metaLive">กำลังดึงข้อมูล สชป.8...</span><br>
+        แหล่งข้อมูล: hwm.rid.go.th / imd.rid.go.th
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="live-bar">
+      <div class="status" id="liveStatus">กำลังเชื่อมต่อระบบ...</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="time" id="liveTime"></span>
+        <button id="btnRefresh">รีเฟรช</button>
+      </div>
+    </div>
+    <div id="contentArea">
+      <div class="loading-overlay">กำลังโหลดข้อมูล สชป.8 จากระบบ...</div>
+    </div>
+  </div>
+
+  <footer>
+    Dashboard สรุปข้อมูลการถ่ายโอนภารกิจ | ฝ่ายปรับปรุงบำรุงรักษา ส่วนบริหารจัดการน้ำและบำรุงรักษา สำนักงานชลประทานที่ 8
+  </footer>
+
+  <script>
+    let barChart = null, doughnutChart = null, doughnutMode = 'status';
+    let currentData = [], currentTotals = { total: 0, done: 0, pending: 0, rate: 0 };
+
+    function getStatusColor(rate) {
+      if (rate >= 100) return { bar: '#2a9d8f', cls: 'high', bg: '#f0fdf4', border: '#2a9d8f' };
+      if (rate >= 80)  return { bar: '#255988', cls: 'mid',  bg: '#f0f9ff', border: '#255988' };
+      if (rate >= 40)  return { bar: '#d97706', cls: 'warn', bg: '#fffbeb', border: '#d97706' };
+      return               { bar: '#e76f51', cls: 'low',  bg: '#fef2f2', border: '#e76f51' };
+    }
+
+    // ลำดับและชื่อเต็มตามที่กำหนด
+    const PROJECT_ORDER = [
+      { key: 'นครราชสีมา', name: 'โครงการชลประทานนครราชสีมา' },
+      { key: 'บุรีรัมย์', name: 'โครงการชลประทานบุรีรัมย์' },
+      { key: 'สุรินทร์', name: 'โครงการชลประทานสุรินทร์' },
+      { key: 'ศรีสะเกษ', name: 'โครงการชลประทานศรีสะเกษ' },
+      { key: 'มูลบน', name: 'โครงการส่งน้ำและบำรุงรักษามูลบน' },
+      { key: 'ลำแชะ', name: 'โครงการส่งน้ำและบำรุงรักษาลำแชะ' },
+      { key: 'ลำตะคอง', name: 'โครงการส่งน้ำและบำรุงรักษาลำตะคอง' },
+      { key: 'ลำพระเพลิง', name: 'โครงการส่งน้ำและบำรุงรักษาลำพระเพลิง' },
+      { key: 'ทุ่งสัมฤทธิ์', name: 'โครงการส่งน้ำและบำรุงรักษาทุ่งสัมฤทธิ์' },
+      { key: 'ลำปลายมาศ', name: 'โครงการส่งน้ำและบำรุงรักษาลำปลายมาศ' },
+      { key: 'ลำนางรอง', name: 'โครงการส่งน้ำและบำรุงรักษาลำนางรอง' },
+      { key: 'มูลกลาง', name: 'โครงการส่งน้ำและบำรุงรักษามูลกลาง' },
+      { key: 'มูลล่าง', name: 'โครงการส่งน้ำและบำรุงรักษามูลล่าง' },
+      { key: 'หัวนา', name: 'โครงการส่งน้ำและบำรุงรักษาหัวนา' },
+      { key: 'ก่อสร้าง', name: 'โครงการก่อสร้าง' }
+    ];
+
+    function mapProjectName(apiName) {
+      const found = PROJECT_ORDER.find(p => apiName.includes(p.key));
+      return found ? found.name : apiName;
+    }
+
+    function projectSortIndex(name) {
+      const idx = PROJECT_ORDER.findIndex(p => name.includes(p.key) || name === p.name);
+      return idx >= 0 ? idx : 999;
+    }
+
+    async function fetchSop8() {
+      const btn = document.getElementById('btnRefresh');
+      const liveStatus = document.getElementById('liveStatus');
+      const liveTime = document.getElementById('liveTime');
+      const metaLive = document.getElementById('metaLive');
+      if (btn) btn.disabled = true;
+      liveStatus.innerHTML = 'กำลังดึงข้อมูล สชป.8...';
+
+      try {
+        const res = await fetch('https://imd.rid.go.th/rid_dc_slim/dashTrans/dashTransfer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}'
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const json = await res.json();
+        if (!json.status) throw new Error(json.message || 'โหลดไม่สำเร็จ');
+
+        const src = json.data || json;
+        const rio = (src.approve || []).find(a => a.skey == 8 || String(a.item).includes('สชป. 8'));
+        const projects = (src.approveProject || []).filter(p => p.rio === 'สชป. 8' || String(p.rio).includes('สชป. 8'));
+
+        if (!rio || !projects.length) throw new Error('ไม่พบข้อมูล สชป.8');
+
+        currentTotals = {
+          total: Number(rio.count) || 0,
+          done: Number(rio.approved) || 0,
+          pending: Number(rio.waiting) || 0,
+          rate: parseFloat(rio.panding) || 0
+        };
+
+        currentData = projects.map(p => ({
+          name: mapProjectName(p.item),
+          total: Number(p.count) || 0,
+          done: Number(p.approved) || 0,
+          pending: Number(p.waiting) || 0,
+          rate: parseFloat(p.panding) || 0
+        })).sort((a, b) => projectSortIndex(a.name) - projectSortIndex(b.name));
+
+        const now = new Date();
+        const timeStr = now.toLocaleString('th-TH', {
+          day: 'numeric', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+
+        liveStatus.innerHTML = '<strong>สชป.8 อัปเดตแล้ว</strong> — ' +
+          currentTotals.done.toLocaleString() + ' / ' + currentTotals.total.toLocaleString() +
+          ' รายการ (' + currentTotals.rate.toFixed(2) + '%)';
+        liveTime.textContent = timeStr;
+        metaLive.textContent = 'ข้อมูลสด ณ ' + timeStr;
+
+        renderDashboard();
+      } catch (err) {
+        liveStatus.innerHTML = '<span style="color:#e76f51">ดึงข้อมูลไม่สำเร็จ:</span> ' + (err.message || err);
+        document.getElementById('contentArea').innerHTML =
+          '<div class="loading-overlay" style="color:#e76f51">ไม่สามารถโหลดข้อมูล สชป.8 ได้<br><small>' +
+          (err.message || err) + '</small><br><br>กดปุ่มรีเฟรชเพื่อลองใหม่</div>';
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    function renderDashboard() {
+      const data = currentData;
+      const T = currentTotals;
+      const done100 = data.filter(d => d.rate >= 100);
+      const good = data.filter(d => d.rate >= 80 && d.rate < 100);
+      const mid = data.filter(d => d.rate >= 40 && d.rate < 80);
+      const low = data.filter(d => d.rate < 40);
+      const pendingItems = data.filter(d => d.pending > 0).sort((a, b) => b.pending - a.pending);
+
+      document.getElementById('contentArea').innerHTML = `
+        <div class="kpi-row">
+          <div class="kpi total"><div class="label">รายการทั้งหมด</div><div class="value">${T.total.toLocaleString()}</div><div class="sub">${data.length} หน่วยงาน</div></div>
+          <div class="kpi done"><div class="label">อนุมัติแล้ว</div><div class="value">${T.done.toLocaleString()}</div><div class="sub">ถ่ายโอนสำเร็จ</div></div>
+          <div class="kpi pending"><div class="label">คงค้าง</div><div class="value">${T.pending.toLocaleString()}</div><div class="sub">รอตรวจสอบ / ดำเนินการ</div></div>
+          <div class="kpi rate"><div class="label">ร้อยละความคืบหน้า</div><div class="value">${T.rate.toFixed(2)}%</div><div class="sub">โดยรวมทั้ง สชป.8</div></div>
+        </div>
+        <div class="insights">
+          <div class="insight green">
+            <div class="title">หน่วยงานที่เสร็จสมบูรณ์ 100%</div>
+            <div class="val">${done100.length} หน่วยงาน</div>
+            <div class="desc">${done100.map(d => d.name).join(' • ') || '-'}</div>
+          </div>
+          <div class="insight red">
+            <div class="title">หน่วยงานที่ควรเร่งรัด (&lt;10%)</div>
+            <div class="val">${data.filter(d => d.rate < 10).length} หน่วยงาน</div>
+            <div class="desc">${data.filter(d => d.rate < 10).map(d => d.name).join(' • ') || '-'}</div>
+          </div>
+          <div class="insight">
+            <div class="title">หน่วยงานที่มีปริมาณงานมากที่สุด</div>
+            <div class="val">${data[0] ? data[0].name : '-'}</div>
+            <div class="desc">${data[0] ? data[0].total.toLocaleString() + ' รายการ (อนุมัติแล้ว ' + data[0].rate.toFixed(2) + '%)' : ''}</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:18px;">
+          <div class="card-title"><span style="display:flex;align-items:center;gap:8px;"><span class="dot" style="background:var(--primary)"></span>ร้อยละการอนุมัติแยกตามหน่วยงาน</span></div>
+          <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">
+              <span style="display:flex;align-items:center;gap:8px;"><span class="dot" style="background:var(--success)"></span><span id="doughnutTitle">สัดส่วนสถานะโดยรวม</span></span>
+              <button id="toggleDoughnut" style="font-size:0.78rem;padding:5px 12px;border-radius:6px;border:1px solid #255988;background:#fff;color:#255988;cursor:pointer;font-family:Sarabun,sans-serif;font-weight:600;">สลับมุมมอง</button>
+            </div>
+            <div style="position:relative;height:220px;flex-shrink:0;">
+              <canvas id="doughnutChart"></canvas>
+              <div style="position:absolute;top:42%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;line-height:1.15;">
+                <div id="centerValue" style="font-size:1.6rem;font-weight:700;color:#255988;">${T.rate.toFixed(2)}%</div>
+                <div id="centerLabel" style="font-size:0.78rem;color:#64748b;">ความคืบหน้า</div>
+              </div>
+            </div>
+            <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:0.88rem;">
+              <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;border-left:3px solid #2a9d8f;">
+                <div style="color:#64748b;font-size:0.78rem;">เสร็จ 100%</div>
+                <div style="font-weight:700;color:#166534;">${done100.length} หน่วยงาน</div>
+                <div style="font-size:0.75rem;color:#64748b;margin-top:2px;">${done100.reduce((s,d)=>s+d.total,0).toLocaleString()} รายการ</div>
+              </div>
+              <div style="background:#f0f9ff;border-radius:8px;padding:10px 12px;border-left:3px solid #255988;">
+                <div style="color:#64748b;font-size:0.78rem;">ดี (80–99%)</div>
+                <div style="font-weight:700;color:#1e4d75;">${good.length} หน่วยงาน</div>
+                <div style="font-size:0.75rem;color:#64748b;margin-top:2px;">รวม ≥80% = ${done100.length + good.length} หน่วยงาน</div>
+              </div>
+              <div style="background:#fffbeb;border-radius:8px;padding:10px 12px;border-left:3px solid #d97706;">
+                <div style="color:#64748b;font-size:0.78rem;">ปานกลาง (40–79%)</div>
+                <div style="font-weight:700;color:#92400e;">${mid.length} หน่วยงาน</div>
+                <div style="font-size:0.75rem;color:#64748b;margin-top:2px;">${mid.map(d=>d.name).join(' • ') || '-'}</div>
+              </div>
+              <div style="background:#fef2f2;border-radius:8px;padding:10px 12px;border-left:3px solid #e76f51;">
+                <div style="color:#64748b;font-size:0.78rem;">ต้องเร่งรัด (&lt;40%)</div>
+                <div style="font-weight:700;color:#991b1b;">${low.length} หน่วยงาน</div>
+                <div style="font-size:0.75rem;color:#64748b;margin-top:2px;">${low.map(d=>d.name).join(' ') || '-'}</div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title"><span style="display:flex;align-items:center;gap:8px;"><span class="dot" style="background:var(--danger)"></span>สรุปงานคงค้าง</span></div>
+            <div class="priority-list">
+              ${pendingItems.map(d => {
+                const st = getStatusColor(d.rate);
+                return '<div class="prio-item" style="background:' + st.bg + ';border-left-color:' + st.border + ';">' +
+                  '<div class="prio-name">' + d.name + '</div>' +
+                  '<div class="prio-stat">คงค้าง <strong>' + d.pending.toLocaleString() + '</strong> จาก <strong>' + d.total.toLocaleString() + '</strong> รายการ</div>' +
+                  '<div class="prio-badge" style="color:' + st.bar + ';">' + d.rate.toFixed(1) + '%</div></div>';
+              }).join('')}
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span style="display:flex;align-items:center;gap:8px;"><span class="dot" style="background:var(--primary)"></span>รายละเอียดทุกหน่วยงาน</span></div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>ลำดับ</th><th>หน่วยงาน</th><th>ทั้งหมด</th><th>อนุมัติแล้ว</th><th>ร้อยละ</th><th>คงค้าง</th></tr></thead>
+              <tbody>
+                ${data.map((d, i) => {
+                  const st = getStatusColor(d.rate);
+                  return '<tr><td>' + (i+1) + '</td><td>' + d.name + '</td><td>' + d.total.toLocaleString() +
+                    '</td><td>' + d.done.toLocaleString() + '</td><td class="bar-cell"><span class="pct ' + st.cls + '">' +
+                    d.rate.toFixed(2) + '%</span><div class="bar-bg"><div class="bar-fill" style="width:' + Math.min(d.rate,100) +
+                    '%;background:' + st.bar + '"></div></div></td><td>' + d.pending.toLocaleString() + '</td></tr>';
+                }).join('')}
+              </tbody>
+              <tfoot>
+                <tr><td colspan="2">รวม</td><td>${T.total.toLocaleString()}</td><td>${T.done.toLocaleString()}</td><td>${T.rate.toFixed(2)}%</td><td>${T.pending.toLocaleString()}</td></tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>`;
+
+      const sortedByRate = [...data].sort((a, b) => b.rate - a.rate);
+      const barLabelPlugin = {
+        id: 'barLabels',
+        afterDatasetsDraw(chart) {
+          const { ctx, scales: { x, y } } = chart;
+          ctx.save();
+          ctx.textBaseline = 'middle';
+          sortedByRate.forEach((item, i) => {
+            const yPos = y.getPixelForValue(i);
+            ctx.font = '600 12px Sarabun, sans-serif';
+            ctx.textAlign = 'left';
+            if (item.rate >= 5) {
+              ctx.fillStyle = '#ffffff';
+              ctx.fillText(item.done.toLocaleString(), x.getPixelForValue(0) + 8, yPos);
+            } else {
+              ctx.fillStyle = '#1e293b';
+              ctx.fillText(item.done.toLocaleString(), x.getPixelForValue(0) + 6, yPos);
+            }
+            ctx.font = '500 11px Sarabun, sans-serif';
+            ctx.fillStyle = '#64748b';
+            ctx.fillText(item.total.toLocaleString(), x.getPixelForValue(100) + 6, yPos);
+          });
+          ctx.restore();
+        }
+      };
+
+      if (barChart) barChart.destroy();
+      barChart = new Chart(document.getElementById('barChart'), {
+        type: 'bar',
+        data: {
+          labels: sortedByRate.map(d => d.name),
+          datasets: [{
+            label: '% อนุมัติ',
+            data: sortedByRate.map(d => d.rate),
+            backgroundColor: sortedByRate.map(d => getStatusColor(d.rate).bar),
+            borderRadius: 4, barPercentage: 0.72
+          }]
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          layout: { padding: { right: 42 } },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: ctx => sortedByRate[ctx[0].dataIndex].name,
+                label: ctx => {
+                  const item = sortedByRate[ctx.dataIndex];
+                  return [
+                    ' อนุมัติแล้ว: ' + item.done.toLocaleString() + ' รายการ',
+                    ' ทั้งหมด: ' + item.total.toLocaleString() + ' รายการ',
+                    ' คงค้าง: ' + item.pending.toLocaleString() + ' รายการ',
+                    ' ร้อยละ: ' + item.rate.toFixed(2) + '%'
+                  ];
+                }
+              }
+            }
+          },
+          scales: {
+            x: { max: 100, ticks: { callback: v => v + '%', font: { size: 11 } }, grid: { color: '#f1f5f9' } },
+            y: { grid: { display: false }, ticks: { font: { size: 12, family: 'Sarabun' }, autoSkip: false } }
+          }
+        },
+        plugins: [barLabelPlugin]
+      });
+
+      const doughnutModes = {
+        status: {
+          title: 'สัดส่วนสถานะโดยรวม',
+          centerValue: T.rate.toFixed(2) + '%', centerLabel: 'ความคืบหน้า',
+          labels: ['อนุมัติแล้ว (' + T.done.toLocaleString() + ')', 'คงค้าง (' + T.pending.toLocaleString() + ')'],
+          data: [T.done, T.pending], colors: ['#2a9d8f', '#e9c46a'],
+          tooltip: ctx => ' ' + ctx.label.split(' (')[0] + ': ' + ctx.raw.toLocaleString() + ' รายการ'
+        },
+        group: {
+          title: 'สัดส่วนตามกลุ่มสถานะ (4 สี)',
+          centerValue: String(data.length), centerLabel: 'หน่วยงาน',
+          labels: [
+            'เสร็จ 100% (' + done100.length + ')', 'ดี 80-99% (' + good.length + ')',
+            'ปานกลาง 40-79% (' + mid.length + ')', 'เร่งรัด <40% (' + low.length + ')'
+          ],
+          data: [done100.length, good.length, mid.length, low.length],
+          colors: ['#2a9d8f', '#255988', '#d97706', '#e76f51'],
+          tooltip: ctx => ' ' + ctx.label + ': ' + ctx.raw + ' หน่วยงาน'
+        }
+      };
+
+      function renderDoughnut() {
+        const m = doughnutModes[doughnutMode];
+        document.getElementById('doughnutTitle').textContent = m.title;
+        document.getElementById('centerValue').textContent = m.centerValue;
+        document.getElementById('centerLabel').textContent = m.centerLabel;
+        if (doughnutChart) doughnutChart.destroy();
+        doughnutChart = new Chart(document.getElementById('doughnutChart'), {
+          type: 'doughnut',
+          data: { labels: m.labels, datasets: [{ data: m.data, backgroundColor: m.colors, borderWidth: 0, hoverOffset: 6 }] },
+          options: {
+            responsive: true, maintainAspectRatio: false, cutout: '68%',
+            plugins: {
+              legend: { position: 'bottom', labels: { padding: 10, usePointStyle: true, font: { size: 11, family: 'Sarabun' } } },
+              tooltip: { callbacks: { label: m.tooltip } }
+            }
+          }
+        });
+      }
+      renderDoughnut();
+      document.getElementById('toggleDoughnut').addEventListener('click', () => {
+        doughnutMode = doughnutMode === 'status' ? 'group' : 'status';
+        renderDoughnut();
+      });
+    }
+
+    document.getElementById('btnRefresh').addEventListener('click', fetchSop8);
+    fetchSop8();
+  </script>
+</body>
+</html>
